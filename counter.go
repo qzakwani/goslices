@@ -1,14 +1,28 @@
 package goslices
 
-type Counter[V comparable] struct {
-	Total   int
-	Set     map[V]int
-	// Order   []K
-	Ordered bool
+import (
+	"cmp"
+	"slices"
+)
+
+type Counter[V cmp.Ordered] struct {
+	Total               int
+	Set                 map[V]int
+	ordered             bool
+	orderedList         []CounterItem[V]
+	olLen               int
+	reversed            bool
+	reversedOrderedList []CounterItem[V]
+	rolLen              int
+}
+
+type CounterItem[V cmp.Ordered] struct {
+	Value V
+	Count int
 }
 
 // Initialize a Counter[K] with a slice of K.
-func NewCounter[T ~[]V, V comparable](s T) *Counter[V] {
+func NewCounter[T ~[]V, V cmp.Ordered](s T) *Counter[V] {
 	m := make(map[V]int)
 	for _, v := range s {
 		_, ok := m[v]
@@ -42,22 +56,103 @@ func (c *Counter[V]) Delete(v V) {
 	}
 }
 
-// todo: implement
-// func (c *Counter[K]) MostCommon(n int) []K {
-// 	if n <= 0 {
-// 		return []K{}
-// 	}
-// 	m := jmaps.Values(c.Set)
-// 	l := len(m)
-// 	if l <= n {
-// 		n = l
-// 	}
-// 	c.Order = make([]K, n)
-// 	slices.Sort(m)
-// 	j := 0
-// 	for i := l-1; i < n; i-- {
-// 		c.Order[j] = m[i]
-// 		j++
-// 	}
+func (c *Counter[V]) order() {
+	if c.ordered {
+		return
+	}
+	c.orderedList = make([]CounterItem[V], len(c.Set))
+	i := 0
+	for k, v := range c.Set {
+		c.orderedList[i] = CounterItem[V]{k, v}
+		i++
+	}
 
-// }
+	slices.SortFunc(c.orderedList, func(a, b CounterItem[V]) int {
+		if n := cmp.Compare(a.Count, b.Count); n != 0 {
+			return n
+		}
+		return cmp.Compare(a.Value, b.Value)
+	})
+
+	c.olLen = len(c.orderedList)
+	c.ordered = true
+}
+
+func (c *Counter[V]) reverseOrder() {
+	if c.reversed {
+		return
+	}
+	c.reversedOrderedList = make([]CounterItem[V], len(c.Set))
+	copy(c.reversedOrderedList, c.orderedList)
+	slices.Reverse(c.reversedOrderedList)
+	c.rolLen = len(c.reversedOrderedList)
+	c.reversed = true
+}
+
+func (c *Counter[V]) MostCommon(n int) []CounterItem[V] {
+	c.order()
+
+	if n <= 0 || n > c.olLen {
+		return c.orderedList
+	}
+
+	return c.orderedList[c.olLen-n:]
+}
+
+func (c *Counter[V]) LeastCommon(n int) []CounterItem[V] {
+	c.order()
+
+	if n <= 0 || n > c.olLen {
+		return c.orderedList
+	}
+
+	return c.orderedList[:n]
+}
+
+func (c *Counter[V]) MostCommonValues(n int) []V {
+	res := c.MostCommon(n)
+	var values []V
+	for _, v := range res {
+		values = append(values, v.Value)
+	}
+	return values
+}
+
+func (c *Counter[V]) LeastCommonValues(n int) []V {
+	res := c.LeastCommon(n)
+	var values []V
+	for _, v := range res {
+		values = append(values, v.Value)
+	}
+	return values
+}
+
+func (c *Counter[V]) ASC() []CounterItem[V] {
+	c.order()
+	return c.orderedList
+}
+
+func (c *Counter[V]) ASCValues() []V {
+	res := c.ASC()
+	var values []V
+	for _, v := range res {
+		values = append(values, v.Value)
+	}
+	return values
+}
+
+func (c *Counter[V]) DESC() []CounterItem[V] {
+	c.reverseOrder()
+	return c.reversedOrderedList
+}
+
+func (c *Counter[V]) DESCValues() []V {
+	res := c.DESC()
+	var values []V
+	for _, v := range res {
+		values = append(values, v.Value)
+	}
+	return values
+}
+
+//todo optimize []V
